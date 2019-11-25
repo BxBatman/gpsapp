@@ -1,7 +1,6 @@
 package com.example.gpsapp;
 
 import android.Manifest;
-import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -12,8 +11,10 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
@@ -28,13 +29,23 @@ import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.example.gpsapp.consts.Constants;
+import com.example.gpsapp.http.HttpApi;
+import com.example.gpsapp.http.RetrofitClientInstance;
 import com.example.gpsapp.model.ActivityRecognized;
-import com.example.gpsapp.model.Configuration;
+import com.example.gpsapp.model.ConfigurationDto;
+import com.example.gpsapp.model.LocationDto;
 import com.example.gpsapp.service.BackgroundDetectedActivitiesService;
 import com.google.android.gms.location.DetectedActivity;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class TrackGpsActivity extends AppCompatActivity {
@@ -52,15 +63,17 @@ public class TrackGpsActivity extends AppCompatActivity {
     private List<ActivityRecognized> activityList;
     private ArrayAdapter<String> adapter;
     LocationListener locationListener;
+    HttpApi api;
 
-    private Configuration configuration;
+    private ConfigurationDto configurationDto;
+    private boolean updatesActive = false;
 
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getSupportActionBar().hide();
-        configuration = (Configuration) getIntent().getSerializableExtra("configuration");
+        configurationDto = (ConfigurationDto) getIntent().getSerializableExtra("configuration");
         setContentView(R.layout.track_gps);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         checkPermissions();
@@ -69,8 +82,10 @@ public class TrackGpsActivity extends AppCompatActivity {
     private void checkPermissions() {
         int MyVersion = Build.VERSION.SDK_INT;
         if (MyVersion > Build.VERSION_CODES.LOLLIPOP_MR1) {
-            if (!checkIfAlreadyhavePermission()) {
-                requestForSpecificPermission();
+            if (!checkIfAlreadyhaveLocationPermission()) {
+                requestForLocationPermission();
+            }else if(!checkIfAlreadyhaveInternetPermission()){
+                requestForInternetPermission();
             }else {
                 initApp();
             }
@@ -81,13 +96,14 @@ public class TrackGpsActivity extends AppCompatActivity {
     }
 
     private void init() {
+        api = RetrofitClientInstance.getRetrofitInstance().create(HttpApi.class);
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             buildAlertMessageNoGps();
         }
         listView = findViewById(R.id.list);
         configurationTextView = findViewById(R.id.configurationTextView);
-        configurationTextView.setText(configuration.getName());
+        configurationTextView.setText(configurationDto.getName());
         items = new ArrayList<>();
         adapter = new ArrayAdapter<>(this,android.R.layout.simple_list_item_1,items);
         listView.setAdapter(adapter);
@@ -101,9 +117,7 @@ public class TrackGpsActivity extends AppCompatActivity {
         locationListener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
-                //TODO insttead show send to server
-                items.add("Location changed: " + location.getLatitude()  + " | " + location.getLongitude()) ;
-                adapter.notifyDataSetChanged();
+               sendLocation(createLocationDto(location));
             }
 
             @Override
@@ -114,7 +128,7 @@ public class TrackGpsActivity extends AppCompatActivity {
             @Override
             public void onProviderEnabled(String s) {
                 if(s.equals(LocationManager.GPS_PROVIDER)) {
-                    items.add("GPS turned on");
+                    items.add( getTime()+" GPS turned on");
                     adapter.notifyDataSetChanged();
                 }
             }
@@ -122,13 +136,15 @@ public class TrackGpsActivity extends AppCompatActivity {
             @Override
             public void onProviderDisabled(String s) {
                 if(s.equals(LocationManager.GPS_PROVIDER)) {
-                    items.add("GPS turned off");
+                    items.add(getTime() +" GPS turned off");
                     adapter.notifyDataSetChanged();
                 }
             }
         };
+        // TODO configurationDto.getTimeIntervalInMinutes()
 
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,1,locationListener);
+        updatesActive = true;
 
         broadcastReceiver = new BroadcastReceiver() {
             @Override
@@ -145,12 +161,56 @@ public class TrackGpsActivity extends AppCompatActivity {
 
     }
 
+    private String getTime(){
+        Date c = Calendar.getInstance().getTime();
+        SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy HH:ss");
+        return df.format(c);
+    }
+
+    private void sendLocation(LocationDto locationDto) {
+        Log.d(TAG, "Sending location");
+        api.saveLocation(locationDto).enqueue(new Callback<LocationDto>() {
+            @Override
+            public void onResponse(Call<LocationDto> call, Response<LocationDto> response) {
+                items.add(getTime()+" LocationDto send") ;
+                adapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onFailure(Call<LocationDto> call, Throwable t) {
+                items.add(getTime() +" Problem with sending location") ;
+                adapter.notifyDataSetChanged();
+            }
+        });
+    }
+
+    private LocationDto createLocationDto(Location location) {
+        LocationDto locationDto = new LocationDto();
+        locationDto.setAcc(String.valueOf(location.getAccuracy()));
+        locationDto.setAlt(String.valueOf(location.getAltitude()));
+        locationDto.setBea((int)location.getBearing());
+        locationDto.setLat(String.valueOf(location.getLatitude()));
+        locationDto.setLng(String.valueOf(location.getLongitude()));
+        locationDto.setProv(location.getProvider());
+        locationDto.setSpd((int)location.getSpeed());
+        locationDto.setSat(0);
+        locationDto.setTime(String.valueOf(System.currentTimeMillis()));
+        locationDto.setSerial("");
+        locationDto.setPlatVer(String.valueOf(Build.VERSION.SDK_INT));
+        BatteryManager bm = (BatteryManager)getSystemService(BATTERY_SERVICE);
+        int batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        locationDto.setBat(batLevel);
+
+        return locationDto;
+
+    }
+
     @Override
     protected void onResume(){
         super.onResume();
         LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver,
                 new IntentFilter(Constants.BROADCAST_DETECTED_ACTIVITY));
-        items.add("Registered : " + Constants.BROADCAST_DETECTED_ACTIVITY);
+        items.add(getTime() + " Registered : " + Constants.BROADCAST_DETECTED_ACTIVITY);
         adapter.notifyDataSetChanged();
     }
 
@@ -158,20 +218,27 @@ public class TrackGpsActivity extends AppCompatActivity {
     protected void onPause(){
         super.onPause();
         LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver);
-        items.add("UnRegistered : " + Constants.BROADCAST_DETECTED_ACTIVITY);
+        items.add(getTime() + " UnRegistered : " + Constants.BROADCAST_DETECTED_ACTIVITY);
         adapter.notifyDataSetChanged();
     }
 
     private void startTrackingActivity(){
         Intent intent = new Intent(TrackGpsActivity.this, BackgroundDetectedActivitiesService.class);
-        items.add("Started service: " + BackgroundDetectedActivitiesService.class.getName() );
+        items.add(getTime() + " Started service: " + BackgroundDetectedActivitiesService.class.getName() );
         startService(intent);
     }
 
     private void stopTrackingActivity(){
         Intent intent = new Intent(TrackGpsActivity.this, BackgroundDetectedActivitiesService.class);
-        items.add("Stopped service: " + BackgroundDetectedActivitiesService.class.getName() );
+        items.add(getTime() + " Stopped service: " + BackgroundDetectedActivitiesService.class.getName() );
         stopService(intent);
+    }
+
+    private void ifNotActiveEnableLocationManager() {
+        if (!updatesActive) {
+            // TODO configurationDto.getTimeIntervalInMinutes()
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,1,locationListener);
+        }
     }
 
 
@@ -179,34 +246,43 @@ public class TrackGpsActivity extends AppCompatActivity {
         switch (type) {
             case DetectedActivity.IN_VEHICLE: {
                 activityText = "IN_VEHICLE";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.ON_BICYCLE: {
                 activityText = "ON_BICECYCLE";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.ON_FOOT: {
                 activityText = "ON_FOOT";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.RUNNING: {
                 activityText = "RUNNING";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.STILL: {
                 activityText = "STILL";
+                locationManager.removeUpdates(locationListener);
+                updatesActive = false;
                 break;
             }
             case DetectedActivity.TILTING: {
                 activityText = "TILTING";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.WALKING: {
                 activityText = "WALKING";
+                ifNotActiveEnableLocationManager();
                 break;
             }
             case DetectedActivity.UNKNOWN: {
                 activityText = "UNKNOWN";
+                ifNotActiveEnableLocationManager();
                 break;
             }
 
@@ -218,21 +294,21 @@ public class TrackGpsActivity extends AppCompatActivity {
 
 
     private void addActivityToLog(String activityText, int confidence) {
-
+        Log.d(TAG, "Add activity");
         if (activityList.size() > 0) {
             ActivityRecognized activityRecognized = activityList.get(activityList.size() - 1);
             if (!activityRecognized.getActivityName().equals(activityText)) {
                 activityList.add(new ActivityRecognized(activityRecognized.getActivityName(), "EXIT"));
-                items.add("Activity: " + activityRecognized.getActivityName() + " ->  EXIT " +  confidence);
+                items.add(getTime() + " Activity: " + activityRecognized.getActivityName() + " ->  EXIT " +  confidence);
                 adapter.notifyDataSetChanged();
 
                 activityList.add(new ActivityRecognized(activityText,"ENTER"));
-                items.add("Activity: " + activityText + " -> ENTER " +  confidence);
+                items.add(getTime() + " Activity: " + activityText + " -> ENTER " +  confidence);
                 adapter.notifyDataSetChanged();
             }
         } else {
             activityList.add(new ActivityRecognized(activityText, "ENTER"));
-            items.add("Activity: " + activityText + " -> ENTER " +  confidence);
+            items.add(getTime() + " Activity: " + activityText + " -> ENTER " +  confidence);
             adapter.notifyDataSetChanged();
         }
 
@@ -245,7 +321,15 @@ public class TrackGpsActivity extends AppCompatActivity {
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     initApp();
                 } else {
-                    Toast.makeText(getApplicationContext(),"NOT GRANTED! ",Toast.LENGTH_LONG).show();
+                    Toast.makeText(getApplicationContext(),"Location permission not granted! ",Toast.LENGTH_LONG).show();
+                }
+                break;
+                //need to check if working
+            case 102:
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    initApp();
+                } else {
+                    Toast.makeText(getApplicationContext(),"Internet permission not granted! ",Toast.LENGTH_LONG).show();
                 }
                 break;
             default:
@@ -253,7 +337,7 @@ public class TrackGpsActivity extends AppCompatActivity {
         }
     }
 
-    private boolean checkIfAlreadyhavePermission() {
+    private boolean checkIfAlreadyhaveLocationPermission() {
         int result = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
         if (result == PackageManager.PERMISSION_GRANTED) {
             return true;
@@ -262,8 +346,21 @@ public class TrackGpsActivity extends AppCompatActivity {
         }
     }
 
-    private void requestForSpecificPermission() {
+    private boolean checkIfAlreadyhaveInternetPermission() {
+        int result = ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET);
+        if (result == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private void requestForLocationPermission() {
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 101);
+    }
+
+    private void requestForInternetPermission() {
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.INTERNET}, 102);
     }
 
     private void buildAlertMessageNoGps() {
@@ -295,7 +392,7 @@ public class TrackGpsActivity extends AppCompatActivity {
     public void stopTracking(View view) {
         locationManager.removeUpdates(locationListener);
         stopTrackingActivity();
-        items.add("STOPPED");
+        items.add(getTime() + " STOPPED");
         adapter.notifyDataSetChanged();
     }
 

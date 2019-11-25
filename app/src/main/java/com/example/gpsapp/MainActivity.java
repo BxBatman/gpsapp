@@ -5,9 +5,16 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Toast;
 
-import com.example.gpsapp.model.Configuration;
+import com.example.gpsapp.http.HttpApi;
+import com.example.gpsapp.http.RetrofitClientInstance;
+import com.example.gpsapp.model.ConfigurationDto;
 import com.google.android.material.textfield.TextInputEditText;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
     TextInputEditText textInputEditText;
@@ -22,17 +29,25 @@ public class MainActivity extends AppCompatActivity {
 
 
     public void goToTrackGps(View view) {
-        Intent intent =  new Intent(this, TrackGpsActivity.class);
+        final Intent intent = new Intent(this, TrackGpsActivity.class);
+        HttpApi api = RetrofitClientInstance.getRetrofitInstance().create(HttpApi.class);
 
-        //MOCKED ! NEED TO GET FROM SERVER BASED ON configuraiton number enetered by user
-        Configuration configuration = new Configuration();
-        configuration.setName(textInputEditText.getText().toString());
-        configuration.setToken("TOKEENENE");
-        configuration.setPositionIntervalInMilliseconds(1000);
-        configuration.setTrackedObjectId("objectname");
-        intent.putExtra("configuration", configuration);
+        if (textInputEditText.getText() == null || textInputEditText.getText().equals("")) {
+            Toast.makeText(MainActivity.this, "Textinput cannot be null", Toast.LENGTH_SHORT).show();
+        } else {
+            Call<ConfigurationDto> call = api.getConfiguration(textInputEditText.getText().toString());
+            call.enqueue(new Callback<ConfigurationDto>() {
+                @Override
+                public void onResponse(Call<ConfigurationDto> call, Response<ConfigurationDto> response) {
+                    intent.putExtra("configuration", response.body());
+                    startActivity(intent);
+                }
 
-
-        startActivity(intent);
+                @Override
+                public void onFailure(Call<ConfigurationDto> call, Throwable t) {
+                    Toast.makeText(MainActivity.this, "Something went wrong...Please try later!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 }
