@@ -9,7 +9,7 @@ import android.widget.Toast;
 
 import com.example.gpsapp.http.HttpApi;
 import com.example.gpsapp.http.RetrofitClientInstance;
-import com.example.gpsapp.model.ConfigurationDto;
+import com.example.models.ConfigurationDto;
 import com.google.android.material.textfield.TextInputEditText;
 
 import retrofit2.Call;

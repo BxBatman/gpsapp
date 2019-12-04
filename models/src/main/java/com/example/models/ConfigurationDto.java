@@ -1,4 +1,4 @@
-package com.example.gpsapp.model;
+package com.example.models;
 
 
 import com.google.gson.annotations.SerializedName;

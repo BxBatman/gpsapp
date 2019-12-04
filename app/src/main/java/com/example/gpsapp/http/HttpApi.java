@@ -1,7 +1,7 @@
 package com.example.gpsapp.http;
 
-import com.example.gpsapp.model.ConfigurationDto;
-import com.example.gpsapp.model.LocationDto;
+import com.example.models.ConfigurationDto;
+import com.example.models.LocationDto;
 
 import retrofit2.Call;
 import retrofit2.http.Body;

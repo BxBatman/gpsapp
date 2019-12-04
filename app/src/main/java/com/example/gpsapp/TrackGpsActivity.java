@@ -31,10 +31,10 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import com.example.gpsapp.consts.Constants;
 import com.example.gpsapp.http.HttpApi;
 import com.example.gpsapp.http.RetrofitClientInstance;
-import com.example.gpsapp.model.ActivityRecognized;
-import com.example.gpsapp.model.ConfigurationDto;
-import com.example.gpsapp.model.LocationDto;
 import com.example.gpsapp.service.BackgroundDetectedActivitiesService;
+import com.example.models.ActivityRecognized;
+import com.example.models.ConfigurationDto;
+import com.example.models.LocationDto;
 import com.google.android.gms.location.DetectedActivity;
 
 import java.text.SimpleDateFormat;

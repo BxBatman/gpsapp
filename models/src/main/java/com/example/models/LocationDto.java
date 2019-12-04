@@ -1,4 +1,4 @@
-package com.example.gpsapp.model;
+package com.example.models;
 
 public class LocationDto {
     private String acc;
