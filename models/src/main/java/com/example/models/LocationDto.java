@@ -1,10 +1,13 @@
 package com.example.models;
 
+import com.google.gson.annotations.SerializedName;
+
 public class LocationDto {
     private String acc;
     private String alt;
     private Integer bea;
     private String lat;
+    @SerializedName("long")
     private String lng;
     private String prov;
     private Integer spd;
@@ -12,11 +15,12 @@ public class LocationDto {
     private String time;
     private String serial;
     private String tid;
+    private String plat;
     private String platVer;
     private Integer bat;
 
 
-    public LocationDto(String acc, String alt, Integer bea, String lat, String lng, String prov, Integer spd, Integer sat, String time, String serial, String tid, String platVer, Integer bat) {
+    public LocationDto(String acc, String alt, Integer bea, String lat, String lng, String prov, Integer spd, Integer sat, String time, String serial, String tid, String plat, String platVer, Integer bat) {
         this.acc = acc;
         this.alt = alt;
         this.bea = bea;
@@ -28,6 +32,7 @@ public class LocationDto {
         this.time = time;
         this.serial = serial;
         this.tid = tid;
+        this.plat = plat;
         this.platVer = platVer;
         this.bat = bat;
     }
@@ -113,6 +118,14 @@ public class LocationDto {
 
     public void setSerial(String serial) {
         this.serial = serial;
+    }
+
+    public String getPlat() {
+        return plat;
+    }
+
+    public void setPlat(String plat) {
+        this.plat = plat;
     }
 
     public String getPlatVer() {

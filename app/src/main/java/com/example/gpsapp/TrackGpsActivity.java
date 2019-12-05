@@ -37,6 +37,10 @@ import com.example.models.ConfigurationDto;
 import com.example.models.LocationDto;
 import com.google.android.gms.location.DetectedActivity;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -63,6 +67,7 @@ public class TrackGpsActivity extends AppCompatActivity {
     private List<ActivityRecognized> activityList;
     private ArrayAdapter<String> adapter;
     LocationListener locationListener;
+    long minutesInMilliseconds;
     HttpApi api;
 
     private ConfigurationDto configurationDto;
@@ -104,6 +109,7 @@ public class TrackGpsActivity extends AppCompatActivity {
         listView = findViewById(R.id.list);
         configurationTextView = findViewById(R.id.configurationTextView);
         configurationTextView.setText(configurationDto.getName());
+        minutesInMilliseconds = configurationDto.getTimeIntervalInMinutes() * 60000;
         items = new ArrayList<>();
         adapter = new ArrayAdapter<>(this,android.R.layout.simple_list_item_1,items);
         listView.setAdapter(adapter);
@@ -141,9 +147,9 @@ public class TrackGpsActivity extends AppCompatActivity {
                 }
             }
         };
-        // TODO configurationDto.getTimeIntervalInMinutes()
 
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,1,locationListener);
+//        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,minutesInMilliseconds,1,locationListener);
         updatesActive = true;
 
         broadcastReceiver = new BroadcastReceiver() {
@@ -194,8 +200,10 @@ public class TrackGpsActivity extends AppCompatActivity {
         locationDto.setProv(location.getProvider());
         locationDto.setSpd((int)location.getSpeed());
         locationDto.setSat(0);
+        locationDto.setTid("");
         locationDto.setTime(String.valueOf(System.currentTimeMillis()));
         locationDto.setSerial("");
+        locationDto.setPlat("Android");
         locationDto.setPlatVer(String.valueOf(Build.VERSION.SDK_INT));
         BatteryManager bm = (BatteryManager)getSystemService(BATTERY_SERVICE);
         int batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
@@ -236,8 +244,8 @@ public class TrackGpsActivity extends AppCompatActivity {
 
     private void ifNotActiveEnableLocationManager() {
         if (!updatesActive) {
-            // TODO configurationDto.getTimeIntervalInMinutes()
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,1,locationListener);
+            //        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,minutesInMilliseconds,1,locationListener);
         }
     }
 
